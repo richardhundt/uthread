@@ -99,7 +99,10 @@ uthread_t* uthread_create(void (*entry)(void *arg), void *arg) {
 }
 
 void uthread_destroy(uthread_t* tid) {
-  if (tid != NULL) free(tid);
+  if (tid != NULL) {
+    uthread_join(tid);
+    free(tid);
+  }
 }
 
 unsigned long uthread_self(void) {
@@ -113,8 +116,12 @@ int umutex_init(umutex_t* mutex) {
 }
 
 umutex_t* umutex_create(void) {
-  umutex_t* mutex = (umutex_t*)malloc(sizeof(umutex_t));
-  umutex_init(mutex);
+  umutex_t* mutex = (umutex_t*)calloc(1, sizeof(umutex_t));
+  if (mutex == NULL) return NULL;
+  if (umutex_init(mutex)) {
+    free(mutex);
+    return NULL;
+  }
   return mutex;
 }
 

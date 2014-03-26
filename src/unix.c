@@ -78,7 +78,10 @@ uthread_t* uthread_create(void (*entry)(void *arg), void *arg) {
 }
 
 void uthread_destroy(uthread_t* tid) {
-  if (tid != NULL) free(tid);
+  if (tid != NULL) {
+    uthread_join(tid);
+    free(tid);
+  }
 }
 
 unsigned long uthread_self(void) {
@@ -110,6 +113,10 @@ int umutex_init(umutex_t* mutex) {
 umutex_t* umutex_create(void) {
   umutex_t* mutex = (umutex_t*)calloc(1, sizeof(umutex_t));
   if (mutex == NULL) return NULL;
+  if (umutex_init(mutex)) {
+    free(mutex);
+    return NULL;
+  }
   return mutex;
 }
 
@@ -182,12 +189,17 @@ error2:
 ucond_t* ucond_create(void) {
   ucond_t* cond = (ucond_t*)malloc(sizeof(ucond_t));
   if (cond == NULL) return NULL;
+  if (ucond_init(cond)) {
+    free(cond);
+    return NULL;
+  }
   return cond;
 }
 
 void ucond_destroy(ucond_t* cond) {
-  if (pthread_cond_destroy(cond))
-    abort();
+  int rc = pthread_cond_destroy(cond);
+  free(cond);
+  if (rc) abort();
 }
 
 void ucond_signal(ucond_t* cond) {
