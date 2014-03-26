@@ -11,10 +11,13 @@ LDFLAGS=-ldl
 
 ifeq ($(OS_NAME), Darwin)
 LDFLAGS+=-bundle -undefined dynamic_lookup -framework CoreServices
-ifeq ($(MH_NAME), x86_64)
-endif
+else
+ifneq (,$(findstring MINGW,$(OS_NAME)))
+LDFLAGS+=-shared
+COPT := -O2
 else
 LDFLAGS+=-shared -lpthread
+endif
 endif
 
 SRCS := uthread.c

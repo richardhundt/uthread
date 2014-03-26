@@ -20,14 +20,11 @@ typedef intptr_t ssize_t;
 typedef HANDLE uthread_t;
 typedef CRITICAL_SECTION umutex_t;
 
-typedef union {
-  CONDITION_VARIABLE cond_var;
-  struct {
-    unsigned int waiters_count;
-    CRITICAL_SECTION waiters_count_lock;
-    HANDLE signal_event;
-    HANDLE broadcast_event;
-  } fallback;
+typedef struct ucond {
+  unsigned int waiters_count;
+  CRITICAL_SECTION waiters_count_lock;
+  HANDLE signal_event;
+  HANDLE broadcast_event;
 } ucond_t;
 #else
 #include <stdint.h>
