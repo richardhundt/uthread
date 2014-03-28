@@ -88,7 +88,7 @@ unsigned long uthread_self(void) {
   return (unsigned long) pthread_self();
 }
 
-int umutex_init(umutex_t* mutex) {
+static int umutex_init(umutex_t* mutex) {
 #if defined(NDEBUG) || !defined(PTHREAD_MUTEX_ERRORCHECK)
   return -pthread_mutex_init(mutex, NULL);
 #else
@@ -147,13 +147,13 @@ void umutex_unlock(umutex_t* mutex) {
 
 #if defined(__APPLE__) && defined(__MACH__)
 
-int ucond_init(ucond_t* cond) {
+static int ucond_init(ucond_t* cond) {
   return -pthread_cond_init(cond, NULL);
 }
 
 #else /* !(defined(__APPLE__) && defined(__MACH__)) */
 
-int ucond_init(ucond_t* cond) {
+static int ucond_init(ucond_t* cond) {
   pthread_condattr_t attr;
   int err;
 
@@ -247,5 +247,121 @@ int ucond_timedwait(ucond_t* cond, umutex_t* mutex, uint64_t timeout) {
 
   abort();
   return -EINVAL;  /* Satisfy the compiler. */
+}
+
+#if defined(__APPLE__) && defined(__MACH__)
+
+static int usem_init(usem_t* sem, unsigned int value) {
+  kern_return_t err;
+
+  err = semaphore_create(mach_task_self(), sem, SYNC_POLICY_FIFO, value);
+  if (err == KERN_SUCCESS)
+    return 0;
+  if (err == KERN_INVALID_ARGUMENT)
+    return -EINVAL;
+  if (err == KERN_RESOURCE_SHORTAGE)
+    return -ENOMEM;
+
+  abort();
+  return -EINVAL;  /* Satisfy the compiler. */
+}
+
+void usem_destroy(usem_t* sem) {
+  int rc = semaphore_destroy(mach_task_self(), *sem);
+  free(sem);
+  if (rc) abort();
+}
+
+void usem_post(usem_t* sem) {
+  if (semaphore_signal(*sem))
+    abort();
+}
+
+void usem_wait(usem_t* sem) {
+  int r;
+
+  do
+    r = semaphore_wait(*sem);
+  while (r == KERN_ABORTED);
+
+  if (r != KERN_SUCCESS)
+    abort();
+}
+
+int usem_trywait(usem_t* sem) {
+  mach_timespec_t interval;
+  kern_return_t err;
+
+  interval.tv_sec = 0;
+  interval.tv_nsec = 0;
+
+  err = semaphore_timedwait(*sem, interval);
+  if (err == KERN_SUCCESS)
+    return 0;
+  if (err == KERN_OPERATION_TIMED_OUT)
+    return -EAGAIN;
+
+  abort();
+  return -EINVAL;  /* Satisfy the compiler. */
+}
+
+#else /* !(defined(__APPLE__) && defined(__MACH__)) */
+
+static int usem_init(usem_t* sem, unsigned int value) {
+  if (sem_init(sem, 0, value))
+    return -errno;
+  return 0;
+}
+
+void usem_destroy(usem_t* sem) {
+  int rc = sem_destroy(sem);
+  free(sem);
+  if (rc) abort();
+}
+
+void usem_post(usem_t* sem) {
+  if (sem_post(sem))
+    abort();
+}
+
+void usem_wait(usem_t* sem) {
+  int r;
+
+  do
+    r = sem_wait(sem);
+  while (r == -1 && errno == EINTR);
+
+  if (r)
+    abort();
+}
+
+int usem_trywait(usem_t* sem) {
+  int r;
+
+  do
+    r = sem_trywait(sem);
+  while (r == -1 && errno == EINTR);
+
+  if (r) {
+    if (errno == EAGAIN)
+      return -EAGAIN;
+    abort();
+  }
+
+  return 0;
+}
+
+#endif /* defined(__APPLE__) && defined(__MACH__) */
+
+usem_t* usem_create(unsigned int value) {
+  usem_t* sem;
+  sem = malloc(sizeof(*sem));
+  if (sem == NULL)
+    return NULL;
+  if (usem_init(sem, value)) {
+    free(sem);
+    return NULL;
+  }
+  return sem;
 }
 

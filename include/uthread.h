@@ -19,6 +19,7 @@ typedef intptr_t ssize_t;
 
 typedef HANDLE uthread_t;
 typedef CRITICAL_SECTION umutex_t;
+typedef HANDLE usem_t;
 
 typedef struct ucond {
   unsigned int waiters_count;
@@ -28,10 +29,19 @@ typedef struct ucond {
 } ucond_t;
 #else
 #include <stdint.h>
+#include <semaphore.h>
 #include <pthread.h>
 typedef pthread_t uthread_t;
 typedef pthread_mutex_t umutex_t;
 typedef pthread_cond_t ucond_t;
+#if defined(__APPLE__) && defined(__MACH__)
+# include <mach/mach.h>
+# include <mach/task.h>
+# include <mach/semaphore.h>
+typedef semaphore_t usem_t;
+#else
+typedef sem_t usem_t;
+#endif
 #endif
 
 struct uthread_ctx {
@@ -40,14 +50,12 @@ struct uthread_ctx {
 };
 
 umutex_t* umutex_create(void);
-int umutex_init(umutex_t* handle);
-void umutex_destroy(umutex_t* handle);
-void umutex_lock(umutex_t* handle);
-int umutex_trylock(umutex_t* handle);
-void umutex_unlock(umutex_t* handle);
+void umutex_destroy(umutex_t* mutex);
+void umutex_lock(umutex_t* mutex);
+int umutex_trylock(umutex_t* mutex);
+void umutex_unlock(umutex_t* mutex);
 
 ucond_t* ucond_create(void);
-int ucond_init(ucond_t* cond);
 void ucond_destroy(ucond_t* cond);
 void ucond_signal(ucond_t* cond);
 void ucond_broadcast(ucond_t* cond);
@@ -58,6 +66,12 @@ uthread_t* uthread_create(void (*entry)(void *arg), void *arg);
 void uthread_destroy(uthread_t* tid);
 unsigned long uthread_self(void);
 int uthread_join(uthread_t *tid);
+
+usem_t* usem_create(unsigned int value);
+void usem_destroy(usem_t* sem);
+void usem_post(usem_t* sem);
+void usem_wait(usem_t* sem);
+int usem_trywait(usem_t* sem);
 
 #endif /* _UTHREAD_H_ */
 

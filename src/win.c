@@ -32,7 +32,6 @@
 
 #include "uthread.h"
 
-int ucond_init(ucond_t* cond);
 void ucond_destroy(ucond_t* cond);
 void ucond_signal(ucond_t* cond);
 void ucond_broadcast(ucond_t* cond);
@@ -98,7 +97,7 @@ unsigned long uthread_self(void) {
 }
 
 
-int umutex_init(umutex_t* mutex) {
+static int umutex_init(umutex_t* mutex) {
   InitializeCriticalSection(mutex);
   return 0;
 }
@@ -164,7 +163,7 @@ error2:
   return err;
 }
 
-int ucond_init(ucond_t* cond) {
+static int ucond_init(ucond_t* cond) {
   static int seen_init = 0;
   if (!seen_init) {
     seen_init = 1;
@@ -274,4 +273,56 @@ void ucond_wait(ucond_t* cond, umutex_t* mutex) {
 int ucond_timedwait(ucond_t* cond, umutex_t* mutex, uint64_t timeout) {
   return ucond_wait_helper(cond, mutex, (DWORD)(timeout / 1e6));
 }
+
+
+int usem_init(usem_t* sem, unsigned int value) {
+  *sem = CreateSemaphore(NULL, value, INT_MAX, NULL);
+  if (*sem == NULL)
+    return -GetLastError();
+  else
+    return 0;
+}
+
+usem_t* usem_create(unsigned int value) {
+  usem_t* sem;
+  sem = malloc(sizeof(*sem));
+  if (sem == NULL)
+    return NULL;
+  int rc = usem_init(sem, value);
+  if (rc) {
+    free(sem);
+    return NULL;
+  }
+  return sem;
+}
+
+void usem_destroy(usem_t* sem) {
+  int rc = CloseHandle(*sem);
+  free(sem);
+  if (!rc) abort()
+}
+
+void usem_post(usem_t* sem) {
+  if (!ReleaseSemaphore(*sem, 1, NULL))
+    abort();
+}
+
+void usem_wait(usem_t* sem) {
+  if (WaitForSingleObject(*sem, INFINITE) != WAIT_OBJECT_0)
+    abort();
+}
+
+int usem_trywait(usem_t* sem) {
+  DWORD r = WaitForSingleObject(*sem, 0);
+
+  if (r == WAIT_OBJECT_0)
+    return 0;
+
+  if (r == WAIT_TIMEOUT)
+    return -EAGAIN;
+
+  abort();
+  return -1; /* Satisfy the compiler. */
+}
+
 
