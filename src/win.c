@@ -299,7 +299,7 @@ usem_t* usem_create(unsigned int value) {
 void usem_destroy(usem_t* sem) {
   int rc = CloseHandle(*sem);
   free(sem);
-  if (!rc) abort()
+  if (!rc) abort();
 }
 
 void usem_post(usem_t* sem) {
